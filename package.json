@@ -1,0 +1,18 @@
+{
+  "name": "blink",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "blink": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "install": "^0.10.2",
+    "lodash": "^4.17.4",
+    "node-blink1": "^0.2.2",
+    "npm": "^5.6.0"
+  }
+}
