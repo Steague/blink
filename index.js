@@ -1,8 +1,91 @@
 const Blink1 = require('node-blink1');
 const _ = require('lodash');
 
+class PromiseBlink1 extends Blink1 {
+    constructor(sn) {
+        super(sn);
+    }
+
+    version(callback = () => {}) {
+        return new Promise(resolve => {
+            Blink1.prototype.version.call(this, version => {
+                callback.call(this);
+                resolve(version);
+            });
+        });
+    }
+
+    fadeToRGB(delay = 0, red, green, blue, index = 0, callback = () => {}) {
+        return new Promise(resolve => {
+            Blink1.prototype.fadeToRGB.apply(this, [
+                delay,
+                red,
+                green,
+                blue,
+                index,
+                () => {
+                    // Pass back RGB state if available
+                    this.returnPromiseColor(resolve, callback);
+                }
+            ]);
+        });
+    }
+
+    setRGB(red, green, blue, callback = () => {}) {
+        return new Promise(resolve => {
+            Blink1.prototype.setRGB.apply(this, [
+                red,
+                green,
+                blue,
+                () => {
+                    // Pass back RGB state if available
+                    this.returnPromiseColor(resolve, callback);
+                }
+            ]);
+        });
+    }
+
+    returnPromiseColor(resolve, callback) {
+        this.version().then((version) => {
+            if (version >= 2) {
+                callback.call(this, this.rgb(0));
+                resolve(this.rgb(0));
+                return;
+            }
+            callback.call(this);
+            resolve();
+        });
+    }
+
+    rgb(index = 0, callback = () => {}) {
+        return new Promise(resolve => {
+            Blink1.prototype.rgb.apply(this, [
+                index,
+                (r, g, b) => {
+                    callback.call(this);
+                    resolve({
+                        red   : r,
+                        green : g,
+                        blue  : b
+                    });
+                }
+            ]);
+        });
+    }
+
+    off(callback = () => {}) {
+        return new Promise(resolve => {
+            Blink1.prototype.off.call(this, () => {
+                callback.call(this);
+                resolve();
+            });
+        });
+    }
+}
+
 class Blink {
     constructor() {
+        this.on = true;
         this.devices = [];
     }
 
@@ -10,10 +93,17 @@ class Blink {
         let deviceSerialNumbers = Blink1.devices();
 
         _.forEach(deviceSerialNumbers, sn => {
-            this.devices.push(new Blink1(sn));
+            let device = new PromiseBlink1(sn);
+            this.devices.push(device);
+
+            device.version().then(version => {
+                console.log("Version", version);
+            });
         });
 
         console.log("Devices connected", this.devices.length);
+
+        this.on = true;
 
         return this;
     }
@@ -22,39 +112,52 @@ class Blink {
         return this.devices.length;
     }
 
-    // componentToHex(c) {
-    //     var hex = c.toString(16);
-    //     return hex.length == 1 ? "0" + hex : hex;
-    // }
-    //
-    // rgbToHex(r, g, b) {
-    //     return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
-    // }
-    //
-    // hexToRgb(hex) {
-    //     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    //     return result ? {
-    //         r: parseInt(result[1], 16),
-    //         g: parseInt(result[2], 16),
-    //         b: parseInt(result[3], 16)
-    //     } : null;
-    // }
-
-    fadeToColor(r, g, b) {
+    fadeToColor(red, green, blue, index = 0, delay = 0) {
         if (this.checkForDevices() == 0) {
             // No devices connected
             return;
         }
 
-        _.forEach(this.devices, device => {
-            device.fadeToRGB(1000, r, g, b, () => {
-                device.rgb((r, g, b) => {
-                    //console.log("Color set complete.", r, g, b);
-                    // cycle RGB colors
-                    this.fadeToColor(b, r, g)
-                });
+        this.devicesDo((device) => {
+            device._validateIndex(index);
+            return device.fadeToRGB(delay, red, green, blue, index);
+        }).then((devicesData) => {
+            _.forEach(devicesData, ({red, green, blue}) => {
+                console.log("Devices faded.", red, green, blue);
             });
+            this.fadeToColor(blue, red, green, 0, 5000);
         });
+
+        return this;
+    }
+
+    setRGB(red, green, blue) {
+        this.devicesDo((device) => {
+            return device.setRGB(red, green, blue);
+        }).then((devicesData) => {
+            _.forEach(devicesData, ({red, green, blue}) => {
+                console.log("Devices set.", red, green, blue);
+            });
+
+            // setTimeout(() => {
+            //     this.devicesDo((device) => {
+            //         return device.off();
+            //     }).then((devicesData) => {
+            //         _.forEach(devicesData, () => {
+            //             console.log("Device off.");
+            //         });
+            //     });
+            // }, 1000);
+            // setTimeout(() => {
+            //     this.setRGB(blue, red, green);
+            // }, 200);
+        });
+
+        return this;
+    }
+
+    devicesDo(func) {
+        return Promise.all(_.map(this.devices, func));
     }
 }
 
@@ -62,4 +165,4 @@ let project = new Blink();
 
 project
     .initDevices()
-    .fadeToColor(255, 0, 0);
+    .fadeToColor(255, 0, 0, 0, 500);
